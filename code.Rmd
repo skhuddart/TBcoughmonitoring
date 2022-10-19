@@ -1,0 +1,134 @@
+---
+title: "Continuous cough monitoring: a novel digital biomarker for tuberculosis diagnosis and treatment response monitoring"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyr)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(lattice)
+library(ggplot2)
+library(lubridate)
+
+
+```
+
+
+```{r readin}
+
+df_long_comp<-read.csv("2022_10_19_coughdata.csv")
+```
+
+
+# Cough Frequency Comparison
+```{r tab2_coughfreq}
+tab2<-matrix(NA,nrow=4, ncol=2)
+rownames(tab2)<-c("Microbiologically confirmed TB", "Clinical TB", "Other respiratory diseases", "Overall")
+colnames(tab2)<-c("Day 1", "Day 14")
+
+med_iqr<-function(vec){
+  output<-paste0(median(vec, na.rm=T)," (", 
+                 quantile(vec,.25 ,na.rm=T), ", ",
+                 quantile(vec,.75 ,na.rm=T), ")" )
+  return(output)
+}
+tab2[1,1]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==1&df_long_comp$dx=="Microbiologic TB"])
+tab2[1,2]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==14&df_long_comp$dx=="Microbiologic TB"])
+
+tab2[2,1]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==1&df_long_comp$dx=="Clinical TB"])
+tab2[2,2]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==14&df_long_comp$dx=="Clinical TB"])
+
+tab2[3,1]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==1&df_long_comp$dx=="TB Negative"])
+tab2[3,2]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==14&df_long_comp$dx=="TB Negative"])
+
+tab2[4,1]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==1])
+tab2[4,2]<- med_iqr(df_long_comp$median_cph[df_long_comp$long_day==14])
+
+
+tab2 %>%
+  kbl(caption="Comparison of medCPH (Q1, Q3) at Day 1 and Day 14. ") %>% 
+  kable_minimal()
+```
+
+
+
+## Statistical tests of difference in cough frequency at Day 1 and Day 14
+```{r}
+#Strong right skew of data, will have to do non-parametric testing
+#hist(df_long$median_cph[df_long$long_day==1&df_long$dx=="Microbiologic TB"])
+#hist(df_long$median_cph[df_long$long_day==14])
+
+day1_overall<-subset(df_long_comp, long_day==1 )
+day14_overall<-subset(df_long_comp, long_day==14)
+
+day1_micro<-subset(df_long_comp, long_day==1 & dx=="Microbiologic TB")
+day14_micro<-subset(df_long_comp, long_day==14 & dx=="Microbiologic TB")
+
+day1_neg<-subset(df_long_comp, long_day==1 & dx=="TB Negative")
+day14_neg<-subset(df_long_comp, long_day==14 & dx=="TB Negative")
+
+day1_clin<-subset(df_long_comp, long_day==1 & dx=="Clinical TB")
+day14_clin<-subset(df_long_comp, long_day==14 & dx=="Clinical TB")
+
+
+day1_test<-wilcox.test(day1_micro$median_cph, day1_neg$median_cph, alternative = "two.sided", paired=F)
+day14_test<-wilcox.test(day14_micro$median_cph, day14_neg$median_cph, alternative = "two.sided", paired=F)
+
+day1_clintest<-wilcox.test(day1_clin$median_cph, day1_neg$median_cph, alternative = "two.sided", paired=F)
+day14_clintest<-wilcox.test(day14_clin$median_cph, day14_neg$median_cph, alternative = "two.sided", paired=F)
+
+```
+Median coughs per hour demonstrate strong right skews at both Day 1 and Day 14. To compare the medians I am using a two sample Wilcoxon test. 
+
+The median Day 1 median cough per hour for Microbiological TB is `r median(day1_micro$median_cph, na.rm=T)` (IQR: `r quantile(day1_micro$median_cph,0.25, na.rm=T)` - `r quantile(day1_micro$median_cph,0.75, na.rm=T)`); for Negative patients it is `r median(day1_neg$median_cph, na.rm=T)` (IQR: `r quantile(day1_neg$median_cph,0.25, na.rm=T)` - `r quantile(day1_neg$median_cph,0.75, na.rm=T)`). This difference is significant (p-value=`r round(day1_test$p.value,2)`). The Day 1 median cough per hour for Clinical TB patients is `r median(day1_clin$median_cph, na.rm=T)` (IQR: `r quantile(day1_clin$median_cph,0.25, na.rm=T)` - `r quantile(day1_clin$median_cph,0.75, na.rm=T)`) and this is not significantly different from the negative patient median (p-value=`r round(day1_clintest$p.value,2)`).
+
+The median Day 14 median cough per hour for Microbiological TB is `r median(day14_micro$median_cph, na.rm=T)` (IQR: `r quantile(day14_micro$median_cph,0.25 ,na.rm=T)` - `r quantile(day14_micro$median_cph,0.75 ,na.rm=T)`); for Negative patients it is `r median(day14_neg$median_cph, na.rm=T)` (IQR: `r quantile(day14_neg$median_cph,0.25, na.rm=T)` - `r quantile(day14_neg$median_cph,0.75, na.rm=T)`). This difference is not significant (p-value=`r round(day14_test$p.value,2)`). The Day 14 median cough per hour for Clinical TB patients is `r median(day14_clin$median_cph, na.rm=T)` (IQR: `r quantile(day14_clin$median_cph,0.25, na.rm=T)` - `r quantile(day14_clin$median_cph,0.75, na.rm=T)`) and this is not significantly different from the negative patient median (p-value=`r round(day14_clintest$p.value,2)`).
+
+### Overall TB comparison Day 1 to Day 14
+```{r}
+overall_comparison<-wilcox.test(day1_overall$median_cph, day14_overall$median_cph, alternative = "two.sided", paired=T)
+```
+The cough frequency among all patients decreased significantly between Day 1 and Day 14 (p-value=`r round(overall_comparison$p.value,2)`)
+
+### Microbiologic TB comparison Day 1 to Day 14
+```{r}
+micro_comparison<-wilcox.test(day1_micro$median_cph, day14_micro$median_cph, alternative = "two.sided", paired=T)
+```
+The cough frequency among Microbiological TB patients decreased significantly between Day 1 and Day 14 (p-value=`r round(micro_comparison$p.value,2)`)
+
+
+### Clinical TB comparison Day 1 to Day 14
+```{r}
+clin_comparison<-wilcox.test(day1_clin$median_cph, day14_clin$median_cph, alternative = "two.sided", paired=T)
+```
+The cough frequency among Clinical TB patients decreased significantly between Day 1 and Day 14 (p-value=`r round(clin_comparison$p.value,2)`)
+
+### ORD comparison Day 1 to Day 14
+```{r}
+ord_comparison<-wilcox.test(day1_neg$median_cph, day14_neg$median_cph, alternative = "two.sided", paired=T)
+```
+The cough frequency among ORD patients decreased significantly between Day 1 and Day 14 (p-value=`r round(ord_comparison$p.value,2)`)
+
+# Longitudinal Cough Trajectories by Diagnostic Status
+
+
+
+```{r medcph_summary}
+
+df_long_comp$dx_lab<-factor(df_long_comp$dx, levels=c("Microbiologic TB","Clinical TB", "TB Negative"))
+
+
+ggplot(df_long_comp, aes(x = long_day, y = median_cph, color=dx_lab)) +
+  geom_smooth(method = "loess") +xlab("Day of recording") + ylab("Coughs per hour") +labs(color="Diagnosis")
+
+
+
+```
+
